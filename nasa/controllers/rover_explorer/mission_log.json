@@ -1,0 +1,27 @@
+{
+  "samples_collected": 3,
+  "samples_found": [
+    {
+      "id": 3,
+      "x": -0.611,
+      "y": -0.868,
+      "time": 62.4,
+      "status": "PENDING_VALIDATION"
+    },
+    {
+      "id": 2,
+      "x": 0.086,
+      "y": -0.772,
+      "time": 186.0,
+      "status": "PENDING_VALIDATION"
+    },
+    {
+      "id": 1,
+      "x": -0.379,
+      "y": -0.34,
+      "time": 306.3,
+      "status": "PENDING_VALIDATION"
+    }
+  ],
+  "state": "COMPLETE"
+}
