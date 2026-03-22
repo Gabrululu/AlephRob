@@ -1,5 +1,4 @@
 from controller import Supervisor
-from controller import Supervisor
 import math
 import json
 
