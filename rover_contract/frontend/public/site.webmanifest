@@ -1,0 +1,16 @@
+{
+  "name": "Aleph1 Rover Mission",
+  "short_name": "Aleph1",
+  "description": "Autonomous Mars rover mission dashboard with GenLayer AI consensus validation",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#C4622D",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

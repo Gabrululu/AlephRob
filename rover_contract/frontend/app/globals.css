@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Orbitron:wght@400;700;900&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --mars-deep:    #0d0502;
+  --mars-dark:    #1a0a06;
+  --mars-mid:     #2d1408;
+  --mars-surface: #3d1e0c;
+  --mars-dust:    #8a5a3a;
+  --mars-sand:    #c4966a;
+  --mars-glow:    #c4622d;
+  --mars-bright:  #e8844a;
+  --mars-pale:    #f0d4b4;
+  --mars-white:   #fdf0e0;
+  --green-signal: #4aff8a;
+  --amber-signal: #ffb84a;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Space Mono', monospace;
+  background: var(--mars-deep);
+  color: var(--mars-sand);
+  overflow-x: hidden;
+}
+
+/* Scanline overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+::selection { background: var(--mars-glow); color: var(--mars-deep); }
+
+a { color: var(--mars-glow); text-decoration: none; }
+a:hover { text-decoration: underline; }
