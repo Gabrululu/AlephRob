@@ -3,7 +3,6 @@
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/nasa/protos/Sojourner.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/rocks/protos/Rock.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/Soil.proto"
 
 WorldInfo {
@@ -26,7 +25,7 @@ WorldInfo {
 Viewpoint {
   fieldOfView 0.895398
   orientation -0.11858990474023445 -0.0073254046005406534 0.9929162970468056 3.5898698387739088
-  position 1.850922265185174 0.9108156820905549 0.7339358941103481
+  position 8.71828421670354 4.277453454418341 2.516948000669773
   near 0.1
   follow "Sojourner"
 }
@@ -89,10 +88,10 @@ DEF SAMPLE_1 Solid {
   children [
     Shape {
       appearance PBRAppearance {
-        baseColor 1 1 0
-        roughness 1
-        metalness 0
-        emissiveColor 1 1 0
+        baseColor 0 0.8 1
+        roughness 0.3
+        metalness 0.5
+        emissiveColor 0 0.4 0.5
       }
       geometry Sphere {
         radius 0.1
@@ -106,10 +105,10 @@ DEF SAMPLE_2 Solid {
   children [
     Shape {
       appearance PBRAppearance {
-        baseColor 1 1 0
-        roughness 1
-        metalness 0
-        emissiveColor 1 1 0
+        baseColor 1 0.8 0
+        roughness 0.3
+        metalness 0.5
+        emissiveColor 0.5 0.4 0
       }
       geometry Sphere {
         radius 0.1
@@ -119,14 +118,14 @@ DEF SAMPLE_2 Solid {
   name "sample_2"
 }
 DEF SAMPLE_3 Solid {
-  translation -0.50 -0.80 0.15
+  translation -0.5 -0.8 0.15
   children [
     Shape {
       appearance PBRAppearance {
-        baseColor 1 1 0
-        roughness 1
-        metalness 0
-        emissiveColor 1 1 0
+        baseColor 0.1 1 0.1
+        roughness 0.3
+        metalness 0.5
+        emissiveColor 0.05 0.5 0
       }
       geometry Sphere {
         radius 0.1
