@@ -1,12 +1,39 @@
 {
-  "samples_collected": 0,
-  "samples_found": [],
-  "state": "FAILED_RETURN",
+  "samples_collected": 3,
+  "samples_found": [
+    {
+      "id": 1,
+      "color": "cyan",
+      "pos": {
+        "x": 0.07,
+        "y": -0.82
+      },
+      "time": 22.3
+    },
+    {
+      "id": 3,
+      "color": "green",
+      "pos": {
+        "x": -0.5,
+        "y": -0.8
+      },
+      "time": 46.0
+    },
+    {
+      "id": 2,
+      "color": "yellow",
+      "pos": {
+        "x": 0.04,
+        "y": -1.47
+      },
+      "time": 79.5
+    }
+  ],
+  "state": "COMPLETE",
   "telemetry": {
-    "battery": 100.0,
     "current_pos": {
-      "x": -0.92,
-      "y": 0.118
+      "x": 0.01,
+      "y": -0.186
     }
   }
 }

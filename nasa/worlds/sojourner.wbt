@@ -7,12 +7,12 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 
 WorldInfo {
   info [
-    "A model of the NASA Sojourner Rover on Mars."
-    "Use the numpad to drive this robot."
-    "Author: Nicolas Uebelhart"
-    "Haute Ecole d'Ingenierie et de Gestion de Vaud (HEIG-VD)"
+    "NASA Sojourner rover — AlephRob multi-color sample collection mission."
+    "3 samples at fixed positions: SAMPLE_1 (cyan), SAMPLE_2 (yellow), SAMPLE_3 (green)."
+    "The rover navigates autonomously, collects each sample and returns to its starting point."
+    "Controller: rover_explorer.py  |  Validated on GenLayer Bradbury testnet."
   ]
-  title "Sojourner Rover"
+  title "Sojourner — Mars Sample Collection"
   gravity 3.73
   basicTimeStep 16
   lineScale 0.2

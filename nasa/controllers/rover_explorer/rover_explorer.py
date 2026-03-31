@@ -1,33 +1,35 @@
 from controller import Supervisor
 import math
 import json
-import os
 
-# ── CONFIGURACIÓN ──────────────────────────────────────────────
-MAX_SPEED = 0.5
-COLLECTION_RADIUS = 0.65
-LOG_FILE = "mission_log.json"
+# ── CONFIGURACIÓN ──────────────────────────────────────────────────────────────
+MAX_SPEED     = 0.6   # rad/s — límite hardware Sojourner
+ARRIVAL_DIST  = 0.20  # m
+STUCK_STEPS   = 150   # ticks entre cheques (~2.4 s a 16 ms/tick)
+STUCK_MIN_MOV = 0.01  # m mínimo de desplazamiento por intervalo
+LOG_FILE      = "mission_log.json"
 
-# ── INICIALIZACIÓN ──────────────────────────────────────────────
-robot = Supervisor()
-timestep = int(robot.getBasicTimeStep())
+SAMPLE_COLORS = {1: "cyan", 2: "yellow", 3: "green"}
+
+# ── INICIALIZACIÓN ─────────────────────────────────────────────────────────────
+robot      = Supervisor()
+timestep   = int(robot.getBasicTimeStep())
 rover_node = robot.getSelf()
 
-left_wheels = [robot.getDevice(f"{n}LeftWheel") for n in ["Front", "Middle", "Back"]]
+left_wheels  = [robot.getDevice(f"{n}LeftWheel")  for n in ["Front", "Middle", "Back"]]
 right_wheels = [robot.getDevice(f"{n}RightWheel") for n in ["Front", "Middle", "Back"]]
-
 for m in left_wheels + right_wheels:
     m.setPosition(float('inf'))
     m.setVelocity(0.0)
 
 mission = {
-    "samples_collected": 0, 
-    "samples_found": [], 
+    "samples_collected": 0,
+    "samples_found": [],
     "state": "IDLE",
-    "telemetry": {"battery": 100.0, "current_pos": {"x": 0, "y": 0}}
+    "telemetry": {"current_pos": {"x": 0, "y": 0}}
 }
 
-# ── FUNCIONES MOTORAS Y APOYO ──────────────────────────────────
+# ── PRIMITIVAS ─────────────────────────────────────────────────────────────────
 def set_speed(left, right):
     for m in left_wheels:  m.setVelocity(max(-MAX_SPEED, min(MAX_SPEED, left)))
     for m in right_wheels: m.setVelocity(max(-MAX_SPEED, min(MAX_SPEED, right)))
@@ -41,13 +43,19 @@ def get_pos():
     p = rover_node.getPosition()
     return p[0], p[1]
 
-def dist_to(tx, ty):
-    x, y = get_pos()
-    return math.sqrt((tx-x)**2 + (ty-y)**2)
+def get_heading():
+    """
+    Heading real desde la matriz de orientación del cuerpo del rover.
+    getOrientation() devuelve R (local→world) en row-major.
+    La primera columna [m0, m3, m6] es el eje local +X en global (dirección adelante).
+    heading = atan2(componente Y global, componente X global).
+    """
+    m = rover_node.getOrientation()
+    return math.atan2(m[3], m[0])
 
 def normalize(a):
-    while a >  math.pi: a -= 2*math.pi
-    while a < -math.pi: a += 2*math.pi
+    while a >  math.pi: a -= 2 * math.pi
+    while a < -math.pi: a += 2 * math.pi
     return a
 
 def save_mission():
@@ -58,115 +66,137 @@ def save_mission():
             json.dump(mission, f, indent=2)
     except: pass
 
-# ── NAVEGACIÓN (LÓGICA CORE) ───────────────────────────────────
+# ── NAVEGACIÓN ─────────────────────────────────────────────────────────────────
+# Convención de giro del Sojourner (verificada con calibración en hackathon):
+#   L > R  →  giro ANTIHORARIO (heading aumenta)  ←  set_speed(+, -)
+#   R > L  →  giro HORARIO     (heading disminuye) ←  set_speed(-, +)
+#
+# Error > 0 → objetivo a la izquierda → necesitamos aumentar heading → L > R.
+
 def go_to(tx, ty, label="OBJETIVO"):
-    global current_heading
-    mission["state"] = f"NAVIGATING_TO_{label.upper()}"
-    print(f"\n[NAV] Rumbo a {label} en ({tx}, {ty})")
+    print(f"\n[NAV] → {label}  ({tx:.2f}, {ty:.2f})")
+    mission["state"] = f"NAV_{label.split()[0].upper()}"
 
-    last_pos = get_pos()
-    stuck_counter = 0
+    check_pos = get_pos()
+    stuck_n   = 0
 
-    for step in range(8000): # Límite de pasos para evitar bucles infinitos
+    for step in range(12000):
         tick()
-        cur_x, cur_y = get_pos()
-        d = math.sqrt((tx - cur_x)**2 + (ty - cur_y)**2)
-        target_angle = math.atan2(ty - cur_y, tx - cur_x)
-        error = normalize(target_angle - current_heading)
+        cx, cy = get_pos()
+        d      = math.sqrt((tx - cx)**2 + (ty - cy)**2)
 
-        if step % 50 == 0:
-            dist_moved = math.sqrt((cur_x - last_pos[0])**2 + (cur_y - last_pos[1])**2)
-            if dist_moved < 0.01: stuck_counter += 1
-            else: stuck_counter = 0
-            last_pos = (cur_x, cur_y)
+        if d < ARRIVAL_DIST:
+            stop()
+            print(f"  [OK] alcanzado  (d={d:.3f} m)")
+            return True
+
+        heading      = get_heading()
+        target_angle = math.atan2(ty - cy, tx - cx)
+        error        = normalize(target_angle - heading)
+
+        # ── detector de atasco ────────────────────────────────────────────────
+        if step > 0 and step % STUCK_STEPS == 0:
+            progress = math.sqrt((cx - check_pos[0])**2 + (cy - check_pos[1])**2)
+            if progress < STUCK_MIN_MOV:
+                stuck_n += 1
+            else:
+                stuck_n = 0
+            check_pos = (cx, cy)
             save_mission()
 
-        if stuck_counter > 3:
-            print(" [!] Atascado. Maniobra de escape...")
-            set_speed(-0.4, -0.4); [tick() for _ in range(60)]
-            set_speed(0.4 * TURN_SIGN, -0.4 * TURN_SIGN); [tick() for _ in range(40)]
-            stuck_counter = 0
-            continue
+            if stuck_n >= 3:
+                print("  [!] Atascado — maniobra de escape")
+                set_speed(-MAX_SPEED, -MAX_SPEED)
+                for _ in range(80): tick()
+                spin = MAX_SPEED * 0.8
+                # error > 0 → objetivo a la izquierda → L > R para antihorario
+                if error > 0:
+                    set_speed(spin, -spin)
+                else:
+                    set_speed(-spin, spin)
+                for _ in range(60): tick()
+                stuck_n   = 0
+                check_pos = get_pos()
+                continue
 
-        if d < 0.18: 
-            stop()
-            print(f" [OK] {label} alcanzado.")
-            return True
-        
+        # ── control proporcional ──────────────────────────────────────────────
         if abs(error) > 0.25:
-            vel = 0.35 * (1.0 if error > 0 else -1.0) * TURN_SIGN
-            set_speed(-vel, vel)
-            current_heading = normalize(current_heading + (vel * 0.04 * TURN_SIGN))
+            # Giro en sitio.
+            # error > 0 → L > R → set_speed(+spd, -spd) → antihorario ✓
+            # error < 0 → R > L → set_speed(-spd, +spd) → horario     ✓
+            spd = MAX_SPEED * 0.8
+            if error > 0:
+                set_speed( spd, -spd)
+            else:
+                set_speed(-spd,  spd)
         else:
-            spd = max(0.2, min(MAX_SPEED, d))
-            correction = error * 0.6 * TURN_SIGN
-            set_speed(spd - correction, spd + correction)
-            
-            dx, dy = cur_x - last_pos[0], cur_y - last_pos[1]
-            if math.sqrt(dx**2 + dy**2) > 0.001:
-                current_heading = math.atan2(dy, dx)
+            # Avance con corrección lateral.
+            # error > 0 → L > R → set_speed(fwd+corr, fwd-corr) → antihorario ✓
+            # error < 0 → R > L → set_speed(fwd+corr, fwd-corr) con corr<0    ✓
+            fwd        = min(MAX_SPEED, max(MAX_SPEED * 0.4, d * 2.0))
+            correction = min(MAX_SPEED * 0.35, max(-MAX_SPEED * 0.35, error * 1.2))
+            set_speed(fwd + correction, fwd - correction)
+
+    stop()
     return False
 
-# ── FASE DE CALIBRACIÓN ────────────────────────────────────────
-print("[CALIB] Iniciando...")
-p0 = get_pos()
-for _ in range(100): set_speed(MAX_SPEED, MAX_SPEED); tick()
-p1 = get_pos()
-HEADING_FWD = math.atan2(p1[1]-p0[1], p1[0]-p0[0])
+# ── ARRANQUE ───────────────────────────────────────────────────────────────────
+# Esperar que la física se estabilice; luego registrar posición y heading reales.
+for _ in range(15): tick()
 
-# Determinar signo de giro
-h_before = HEADING_FWD
-for _ in range(30): set_speed(-0.3, 0.3); tick()
-p2 = get_pos()
-for _ in range(40): set_speed(MAX_SPEED, MAX_SPEED); tick()
-p3 = get_pos()
-h_after = math.atan2(p3[1]-p2[1], p3[0]-p2[0])
-TURN_SIGN = 1 if normalize(h_after - h_before) > 0 else -1
+start_x, start_y = get_pos()
+print(f"[INIT] Inicio: ({start_x:.3f}, {start_y:.3f})  "
+      f"heading: {math.degrees(get_heading()):.1f}°")
 
-# Volver al origen para posicionar muestras
-for _ in range(170): set_speed(-MAX_SPEED, -MAX_SPEED); tick()
-stop()
-ox, oy = get_pos()
-current_heading = HEADING_FWD
+# ── LEER MUESTRAS DEL MUNDO (sin moverlas) ────────────────────────────────────
+SAMPLES = []
+for i in range(1, 4):
+    node = robot.getFromDef(f"SAMPLE_{i}")
+    if node:
+        pos = node.getField("translation").getSFVec3f()
+        SAMPLES.append({"id": i, "x": pos[0], "y": pos[1],
+                         "color": SAMPLE_COLORS[i], "node": node})
 
-# Configurar Muestras
-af, al, ar = HEADING_FWD, HEADING_FWD + math.pi/2, HEADING_FWD - math.pi/2
-SAMPLE_LOCATIONS = [
-    {"id":1, "x":round(ox+1.5*math.cos(af),2), "y":round(oy+1.5*math.sin(af),2), "collected":False},
-    {"id":2, "x":round(ox+1.0*math.cos(af)+0.8*math.cos(al),2), "y":round(oy+1.0*math.sin(af)+0.8*math.sin(al),2), "collected":False},
-    {"id":3, "x":round(ox+1.0*math.cos(af)+0.8*math.cos(ar),2), "y":round(oy+1.0*math.sin(af)+0.8*math.sin(ar),2), "collected":False},
-]
+print(f"\n[MISIÓN] {len(SAMPLES)} muestras detectadas:")
+for s in SAMPLES:
+    cx, cy = get_pos()
+    d = math.sqrt((s["x"] - cx)**2 + (s["y"] - cy)**2)
+    print(f"  SAMPLE_{s['id']} ({s['color']})  pos=({s['x']:.2f},{s['y']:.2f})  d={d:.2f}m")
+print(f"[MISIÓN] Retorno al: ({start_x:.3f}, {start_y:.3f})")
 
-for s in SAMPLE_LOCATIONS:
-    try:
-        node = robot.getFromDef(f"SAMPLE_{s['id']}")
-        if node: node.getField("translation").setSFVec3f([s["x"], s["y"], 0.15])
-    except: pass
+# ── MISIÓN: recoger cada muestra en orden de proximidad ───────────────────────
+def dist_now(s):
+    cx, cy = get_pos()
+    return math.sqrt((s["x"] - cx)**2 + (s["y"] - cy)**2)
 
-# ── EJECUCIÓN DE LA MISIÓN ──────────────────────────────────────
-print(f"\n[MISIÓN] Calibración OK. TURN_SIGN: {TURN_SIGN}")
-
-# 1. Recolectar todas las muestras
-for s in sorted(SAMPLE_LOCATIONS, key=lambda x: dist_to(x["x"], x["y"])):
-    if go_to(s["x"], s["y"], f"Muestra #{s['id']}"):
-        # Lógica de recolección
-        stop(); [tick() for _ in range(30)]
+for s in sorted(SAMPLES, key=dist_now):
+    print(f"\n[MISIÓN] → SAMPLE_{s['id']} ({s['color']})")
+    if go_to(s["x"], s["y"], f"SAMPLE_{s['id']} ({s['color']})"):
+        for _ in range(20): tick()   # pausa de recogida
         mission["samples_collected"] += 1
-        mission["samples_found"].append({"id": s['id'], "time": round(robot.getTime(),1)})
+        mission["samples_found"].append({
+            "id": s["id"], "color": s["color"],
+            "pos": {"x": round(s["x"], 2), "y": round(s["y"], 2)},
+            "time": round(robot.getTime(), 1)
+        })
         try:
-            node = robot.getFromDef(f"SAMPLE_{s['id']}")
-            if node: node.remove()
+            if s["node"]: s["node"].remove()
         except: pass
+        print(f"  [RECOGIDA] SAMPLE_{s['id']} ({s['color']})")
         save_mission()
+    else:
+        print(f"  [FALLO] No se alcanzó SAMPLE_{s['id']}")
 
-# 2. Regresar a la base (0,0)
-print("\n[MISIÓN] Recolección completada. Regresando a la base...")
-if go_to(ox, oy, "BASE_ORIGEN"):
+# ── RETORNO AL ORIGEN ─────────────────────────────────────────────────────────
+n = mission["samples_collected"]
+print(f"\n[MISIÓN] {n}/3 recolectadas. "
+      f"Regresando a ({start_x:.2f}, {start_y:.2f})...")
+if go_to(start_x, start_y, "ORIGEN"):
     mission["state"] = "COMPLETE"
-    print("\n[SISTEMA] Rover en base. Apagando sistemas.")
+    print("[FIN] Rover en origen. Misión completada con éxito.")
 else:
     mission["state"] = "FAILED_RETURN"
-    print("\n[ERROR] No se pudo alcanzar la base.")
+    print("[ERROR] No se pudo alcanzar el origen.")
 
 save_mission()
 while robot.step(timestep) != -1: stop()
