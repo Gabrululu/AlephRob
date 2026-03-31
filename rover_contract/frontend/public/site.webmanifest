@@ -1,6 +1,6 @@
 {
-  "name": "Aleph1 Rover Mission",
-  "short_name": "Aleph1",
+  "name": "AlephRob Rover Mission",
+  "short_name": "AlephRob",
   "description": "Autonomous Mars rover mission dashboard with GenLayer AI consensus validation",
   "start_url": "/",
   "display": "standalone",

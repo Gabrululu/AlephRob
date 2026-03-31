@@ -10,6 +10,93 @@ const TX_HASHES = [
   "0x655bdd64b8b568d3121850d5929f09f3ef0c818be2ed9c942b22ea3f6ee77e70",
 ];
 
+// ── Hardcoded protocol data ────────────────────────────────────────────────────
+
+const AGENT_REGISTRY   = "0xf39101cB9A2CD4224d0143f812B9c6CB012edDAe";
+const MISSION_FACTORY  = "0xfdca4ab91E9c49f4f466F47F5adB9e34B3Eb5Ed6";
+const REP_LEDGER       = "0x857aB4021C393872DcB5b7e7091f24330f2ef913";
+
+const ROVERS = [
+  {
+    id: "rover-explorer-01", name: "Sojourner-X", type: "EXPLORER", rep: 78,
+    tx: "0xb8165cee977592dea42c657a4953dab3cdecb6fd2713f6c02630d6b900535dfc",
+  },
+  {
+    id: "rover-collector-01", name: "Curiosity-C", type: "COLLECTOR", rep: 72,
+    tx: "0xc915b8348014b24f7b22baa757a2d29364790bcbe4b518940b0e0c3493929c07",
+  },
+  {
+    id: "rover-analyst-01", name: "Ingenuity-A", type: "ANALYST", rep: 85,
+    tx: "0xe5b4fae5b924fb42668901951383e901e6c996f0889204659d6b768cb9f2efa6",
+  },
+  {
+    id: "rover-transporter-01", name: "Perseverance-T", type: "TRANSPORTER", rep: 68,
+    tx: "0xcb73376e2e86c0e9ebf8b14ae2614ac946ba589fb5889a30bacb9164f8aa99f9",
+  },
+];
+
+const TASKS = [
+  {
+    id: "task-explore-01", type: "EXPLORE", rover: "Sojourner-X",
+    status: "COMPLETED",
+    result: "Terrain mapped at (-0.82, 0.07). 3 geological targets identified.",
+  },
+  {
+    id: "task-collect-01", type: "COLLECT", rover: "Curiosity-C",
+    status: "COMPLETED",
+    result: "Sample extracted, 12.3g basaltic rock. Confidence 0.91.",
+  },
+  {
+    id: "task-analyze-01", type: "ANALYZE", rover: "Ingenuity-A",
+    status: "COMPLETED",
+    result: "48% pyroxene, 31% plagioclase, 21% olivine. Volcanic origin.",
+  },
+  {
+    id: "task-transport-01", type: "TRANSPORT", rover: "Perseverance-T",
+    status: "COMPLETED",
+    result: "Sample C-07 delivered to base station. Chain of custody intact.",
+  },
+];
+
+const REPORTS = [
+  {
+    id: "report-001", reporter: "Sojourner-X", target: "Curiosity-C",
+    task: "task-collect-01", outcome: "SUCCESS",
+    verdict: "Sample extraction precise and complete under dust storm conditions.",
+    tx: "0x06b6048df4c78dcb007985a04335058e2ca941ae7649936f4efb1d141efe86e6",
+  },
+  {
+    id: "report-002", reporter: "Curiosity-C", target: "Ingenuity-A",
+    task: "task-analyze-01", outcome: "SUCCESS",
+    verdict: "Spectrometry completed ahead of schedule with exceptional mineral detail.",
+    tx: "0xc45b119b0abd7f93cb05d3b1fad51fe8fb250b0697d50d0b29ae3e6524ca91f9",
+  },
+  {
+    id: "report-003", reporter: "Ingenuity-A", target: "Perseverance-T",
+    task: "task-transport-01", outcome: "SUCCESS",
+    verdict: "Autonomous transport maintained full chain of custody over rough terrain.",
+    tx: "0x0e6e3ecd01f4b2f87bf0171f0b45339a255c1f9a18c070c65140e9ac7e70c638",
+  },
+  {
+    id: "report-004", reporter: "Perseverance-T", target: "Sojourner-X",
+    task: "task-explore-01", outcome: "SUCCESS",
+    verdict: "Terrain mapping accurate with all 3 geological points precisely identified.",
+    tx: "0x03ca784343cd239cc6482cd133156c2493864479c093ae3bb15eb411f99ebc02",
+  },
+];
+
+function typeColor(t: string): { bg: string; border: string; text: string } {
+  switch (t) {
+    case "EXPLORER":    return { bg: "rgba(55,138,221,.15)",  border: "rgba(55,138,221,.4)",  text: "#6ab4ff" };
+    case "COLLECTOR":   return { bg: "rgba(196,98,45,.15)",   border: "rgba(196,98,45,.4)",   text: "#c4622d" };
+    case "ANALYST":     return { bg: "rgba(130,90,180,.15)",  border: "rgba(130,90,180,.4)",  text: "#a06ad4" };
+    case "TRANSPORTER": return { bg: "rgba(29,158,117,.15)",  border: "rgba(29,158,117,.4)",  text: "#1d9e75" };
+    default:            return { bg: "rgba(138,90,58,.1)",    border: "rgba(138,90,58,.3)",   text: "#8a5a3a" };
+  }
+}
+
+// ── Original interfaces ────────────────────────────────────────────────────────
+
 interface Sample {
   id: string;
   x: string;
@@ -24,6 +111,8 @@ interface MissionData {
   samples_found: Sample[];
   state: string;
 }
+
+// ── Original hooks & components ───────────────────────────────────────────────
 
 function useTypingEffect(text: string, speed = 25) {
   const [displayed, setDisplayed] = useState("");
@@ -88,6 +177,8 @@ function MarsCanvas() {
   );
 }
 
+// ── Main component ─────────────────────────────────────────────────────────────
+
 export default function Home() {
   const [mission, setMission] = useState<MissionData | null>(null);
   const [tick, setTick] = useState(0);
@@ -149,6 +240,7 @@ export default function Home() {
         @keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(196,98,45,.6)}70%{box-shadow:0 0 0 10px rgba(196,98,45,0)}100%{box-shadow:0 0 0 0 rgba(196,98,45,0)}}
         @keyframes rotateRing{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes glitch{0%{clip-path:inset(20% 0 60% 0);transform:translate(-3px,0)}33%{clip-path:inset(50% 0 20% 0);transform:translate(3px,0)}66%{clip-path:inset(10% 0 70% 0);transform:translate(-1px,0)}100%{clip-path:inset(0);transform:translate(0)}}
+        @keyframes pulseAmber{0%,100%{box-shadow:0 0 0 0 rgba(255,184,74,.5)}70%{box-shadow:0 0 0 8px rgba(255,184,74,0)}}
         .fade1{animation:fadeUp .7s .1s ease both}
         .fade2{animation:fadeUp .7s .25s ease both}
         .fade3{animation:fadeUp .7s .4s ease both}
@@ -164,6 +256,8 @@ export default function Home() {
         .cta-primary:hover{background:var(--mars-bright) !important}
         .cta-secondary:hover{border-color:var(--mars-glow) !important;color:var(--mars-pale) !important}
         .arch-card:hover .arch-num{color:rgba(196,98,45,.15) !important}
+        .rover-card:hover{border-color:var(--mars-glow) !important;transform:translateY(-2px);transition:all .2s}
+        .rep-row:hover{background:rgba(45,20,8,.5)}
       `}</style>
 
       {/* NAV */}
@@ -175,10 +269,11 @@ export default function Home() {
       }}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginRight:"auto"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:"var(--mars-glow)",animation:"pulseRing 2s infinite"}}/>
-          <span style={{fontFamily:"'Orbitron',monospace",fontSize:13,color:"var(--mars-pale)",letterSpacing:".15em"}}>Aleph1</span>
+          <span style={{fontFamily:"'Orbitron',monospace",fontSize:13,color:"var(--mars-pale)",letterSpacing:".15em"}}>AlephRob</span>
         </div>
         <a href="#mission" className="nav-link">Mission</a>
         <a href="#tech" className="nav-link">Architecture</a>
+        <a href="#fleet" className="nav-link">Fleet</a>
         <a href="#dashboard" className="nav-link">Live data</a>
         <a href={EXPLORER+"/address/"+CONTRACT} target="_blank" rel="noreferrer" className="nav-link" style={{color:"var(--mars-glow)"}}>
           Explorer ↗
@@ -304,7 +399,285 @@ export default function Home() {
         </div>
       </section>
 
-      {/* DASHBOARD */}
+      {/* ── NEW: AGENT FLEET ── */}
+      <section id="fleet" style={{
+        padding:"100px 40px",
+        borderTop:"1px solid rgba(196,98,45,.12)",
+      }}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{fontSize:10,color:"var(--mars-glow)",letterSpacing:".2em",textTransform:"uppercase",marginBottom:14}}>
+            Agent fleet — registered rovers
+          </div>
+          <h2 style={{fontFamily:"'Orbitron',monospace",fontSize:"clamp(24px,4vw,50px)",color:"var(--mars-pale)",fontWeight:700,marginBottom:16,lineHeight:1.15}}>
+            Active agents
+          </h2>
+          <div style={{fontSize:12,color:"var(--mars-dust)",marginBottom:48}}>
+            AgentRegistry ·{" "}
+            <a href={EXPLORER+"/address/"+AGENT_REGISTRY} target="_blank" rel="noreferrer" style={{color:"var(--mars-glow)",fontFamily:"'Space Mono',monospace",fontSize:11}}>
+              {AGENT_REGISTRY.slice(0,10)}…{AGENT_REGISTRY.slice(-6)}
+            </a>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>
+            {ROVERS.map((rover) => {
+              const tc = typeColor(rover.type);
+              return (
+                <div key={rover.id} className="rover-card" style={{
+                  background:"var(--mars-mid)",border:"1px solid rgba(196,98,45,.22)",
+                  borderRadius:6,padding:"24px 22px",display:"flex",flexDirection:"column",gap:16,
+                }}>
+                  {/* Header */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                    <div>
+                      <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,fontWeight:700,color:"var(--mars-pale)",marginBottom:4}}>
+                        {rover.name}
+                      </div>
+                      <div style={{fontSize:9,color:"var(--mars-dust)",letterSpacing:".06em"}}>{rover.id}</div>
+                    </div>
+                    <span style={{
+                      background:tc.bg,border:`1px solid ${tc.border}`,color:tc.text,
+                      fontSize:9,letterSpacing:".12em",padding:"3px 8px",
+                      borderRadius:3,textTransform:"uppercase" as const,fontWeight:700,flexShrink:0,
+                    }}>
+                      {rover.type}
+                    </span>
+                  </div>
+
+                  {/* Reputation */}
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+                      <span style={{fontSize:9,color:"var(--mars-dust)",letterSpacing:".1em",textTransform:"uppercase" as const}}>Reputation</span>
+                      <span style={{fontFamily:"'Orbitron',monospace",fontSize:24,fontWeight:700,color:tc.text}}>{rover.rep}</span>
+                    </div>
+                    <div style={{height:4,background:"rgba(196,98,45,.1)",borderRadius:2,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${rover.rep}%`,background:tc.text,borderRadius:2}}/>
+                    </div>
+                  </div>
+
+                  {/* Status + TX */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{
+                      background:"rgba(74,255,138,.08)",border:"1px solid rgba(74,255,138,.2)",
+                      color:"#4aff8a",fontSize:9,letterSpacing:".12em",
+                      padding:"3px 8px",borderRadius:3,textTransform:"uppercase" as const,fontWeight:700,
+                    }}>
+                      ACTIVE
+                    </span>
+                    <a
+                      href={EXPLORER+"/tx/"+rover.tx}
+                      target="_blank" rel="noreferrer"
+                      className="tx-link"
+                      style={{fontSize:10,color:"var(--mars-glow)",fontFamily:"'Space Mono',monospace"}}
+                    >
+                      {rover.tx.slice(0,8)}…{rover.tx.slice(-6)}
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── NEW: MISSION TIMELINE ── */}
+      <section id="olympus" style={{
+        padding:"100px 40px",
+        background:"var(--mars-dark)",
+        borderTop:"1px solid rgba(196,98,45,.12)",
+      }}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{fontSize:10,color:"var(--mars-glow)",letterSpacing:".2em",textTransform:"uppercase",marginBottom:14}}>
+            Active mission — olympus-01
+          </div>
+          <h2 style={{fontFamily:"'Orbitron',monospace",fontSize:"clamp(24px,4vw,50px)",color:"var(--mars-pale)",fontWeight:700,marginBottom:16,lineHeight:1.15}}>
+            Geological survey
+          </h2>
+          <div style={{fontSize:12,color:"var(--mars-dust)",marginBottom:48}}>
+            MissionFactory ·{" "}
+            <a href={EXPLORER+"/address/"+MISSION_FACTORY} target="_blank" rel="noreferrer" style={{color:"var(--mars-glow)",fontFamily:"'Space Mono',monospace",fontSize:11}}>
+              {MISSION_FACTORY.slice(0,10)}…{MISSION_FACTORY.slice(-6)}
+            </a>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{marginBottom:48}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+              <span style={{fontSize:10,color:"var(--mars-dust)",letterSpacing:".12em",textTransform:"uppercase" as const}}>Mission progress</span>
+              <span style={{fontFamily:"'Orbitron',monospace",fontSize:13,color:"var(--mars-pale)"}}>4 / 4 tasks completed</span>
+            </div>
+            <div style={{height:4,background:"rgba(196,98,45,.1)",borderRadius:2,overflow:"hidden"}}>
+              <div style={{height:"100%",width:"100%",background:"var(--mars-glow)",borderRadius:2}}/>
+            </div>
+          </div>
+
+          {/* Timeline */}
+          <div style={{display:"flex",gap:40,flexWrap:"wrap" as const}}>
+            {/* Left: vertical timeline */}
+            <div style={{flex:"1 1 420px",minWidth:280,position:"relative"}}>
+              {TASKS.map((task, i) => {
+                const isLast = i === TASKS.length - 1;
+                const done = task.status === "COMPLETED";
+                const live = task.status === "IN_PROGRESS";
+                const statusColor = done ? "#4aff8a" : live ? "#ffb84a" : "var(--mars-dust)";
+                const shortResult = task.result.length > 80 ? task.result.slice(0, 77) + "…" : task.result;
+                return (
+                  <div key={task.id} style={{display:"flex",gap:16,position:"relative"}}>
+                    {/* Connector */}
+                    {!isLast && (
+                      <div style={{
+                        position:"absolute",left:4,top:14,bottom:-8,width:2,
+                        background: done ? "var(--mars-glow)" : "rgba(196,98,45,.3)",
+                        transition:"background .4s",
+                      }}/>
+                    )}
+                    {/* Dot */}
+                    <div style={{
+                      flexShrink:0,width:10,height:10,borderRadius:"50%",
+                      background:statusColor,marginTop:5,zIndex:1,
+                      boxShadow: done ? "0 0 6px rgba(196,98,45,.6)" : "none",
+                    }}/>
+                    {/* Content */}
+                    <div style={{paddingBottom:isLast?0:28,flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap" as const}}>
+                        <span style={{
+                          fontSize:10,color:"var(--mars-glow)",letterSpacing:".12em",
+                          textTransform:"uppercase" as const,
+                        }}>{task.type}</span>
+                        <span style={{fontSize:10,color:"var(--mars-dust)"}}>·</span>
+                        <span style={{fontSize:11,color:"var(--mars-pale)"}}>{task.id}</span>
+                      </div>
+                      <div style={{fontSize:12,color:"var(--mars-dust)",marginBottom:6}}>{task.rover}</div>
+                      <div style={{
+                        display:"inline-flex",alignItems:"center",gap:5,
+                        padding:"2px 8px",borderRadius:3,marginBottom:8,
+                        background: done?"rgba(74,255,138,.06)":live?"rgba(255,184,74,.06)":"rgba(138,90,58,.06)",
+                        border:`1px solid ${done?"rgba(74,255,138,.2)":live?"rgba(255,184,74,.2)":"rgba(138,90,58,.2)"}`,
+                      }}>
+                        <span style={{
+                          width:5,height:5,borderRadius:"50%",background:statusColor,display:"inline-block",
+                          animation: live ? "pulseAmber 2s infinite" : "none",
+                        }}/>
+                        <span style={{fontSize:9,color:statusColor,letterSpacing:".1em",fontWeight:700}}>
+                          {task.status}
+                        </span>
+                      </div>
+                      <div style={{fontSize:11,color:"var(--mars-dust)",lineHeight:1.6}}>{shortResult}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Right: mission complete badge */}
+            <div style={{flex:"0 0 auto",display:"flex",alignItems:"center"}}>
+              <div style={{
+                padding:"24px 32px",borderRadius:6,textAlign:"center" as const,
+                background:"rgba(74,255,138,.04)",border:"1px solid rgba(74,255,138,.25)",
+              }}>
+                <div style={{fontSize:9,color:"#4aff8a",letterSpacing:".2em",textTransform:"uppercase" as const,marginBottom:10}}>
+                  All tasks validated on-chain
+                </div>
+                <div style={{fontFamily:"'Orbitron',monospace",fontSize:18,fontWeight:700,color:"#4aff8a",letterSpacing:".08em"}}>
+                  MISSION COMPLETE
+                </div>
+                <div style={{fontSize:10,color:"var(--mars-dust)",marginTop:8}}>mission-olympus-01</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── NEW: REPUTATION LEDGER ── */}
+      <section id="ledger" style={{
+        padding:"100px 40px",
+        borderTop:"1px solid rgba(196,98,45,.12)",
+      }}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{fontSize:10,color:"var(--mars-glow)",letterSpacing:".2em",textTransform:"uppercase",marginBottom:14}}>
+            Peer-to-peer reputation — bradbury
+          </div>
+          <h2 style={{fontFamily:"'Orbitron',monospace",fontSize:"clamp(24px,4vw,50px)",color:"var(--mars-pale)",fontWeight:700,marginBottom:16,lineHeight:1.15}}>
+            Performance reports
+          </h2>
+          <div style={{fontSize:12,color:"var(--mars-dust)",marginBottom:48}}>
+            ReputationLedger ·{" "}
+            <a href={EXPLORER+"/address/"+REP_LEDGER} target="_blank" rel="noreferrer" style={{color:"var(--mars-glow)",fontFamily:"'Space Mono',monospace",fontSize:11}}>
+              {REP_LEDGER.slice(0,10)}…{REP_LEDGER.slice(-6)}
+            </a>
+          </div>
+
+          <div style={{background:"var(--mars-mid)",border:"1px solid rgba(196,98,45,.22)",borderRadius:6,overflow:"hidden"}}>
+            {/* Table header */}
+            <div style={{
+              padding:"13px 24px",borderBottom:"1px solid rgba(196,98,45,.12)",
+              display:"flex",alignItems:"center",gap:10,
+              fontSize:10,color:"var(--mars-dust)",letterSpacing:".14em",textTransform:"uppercase" as const,
+            }}>
+              <span style={{width:6,height:6,borderRadius:"50%",background:"var(--mars-glow)",display:"inline-block"}}/>
+              Reputation log — AI-validated peer reports
+            </div>
+            <table style={{width:"100%",borderCollapse:"collapse" as const}}>
+              <thead>
+                <tr style={{background:"rgba(0,0,0,.18)"}}>
+                  {["Reporter → Target","Task","Outcome","LLM Verdict","Transaction"].map(h=>(
+                    <th key={h} style={thStyle}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {REPORTS.map((r) => (
+                  <tr key={r.id} className="rep-row" style={{borderTop:"1px solid rgba(196,98,45,.07)"}}>
+                    <td style={{padding:"14px 24px"}}>
+                      <div style={{fontFamily:"'Space Mono',monospace",fontSize:11,color:"var(--mars-pale)"}}>
+                        {r.reporter} → {r.target}
+                      </div>
+                      <div style={{fontSize:9,color:"var(--mars-dust)",marginTop:2}}>{r.id}</div>
+                    </td>
+                    <td style={{padding:"14px 24px",fontSize:11,color:"var(--mars-sand)",fontFamily:"'Space Mono',monospace"}}>
+                      {r.task}
+                    </td>
+                    <td style={{padding:"14px 24px"}}>
+                      <span style={{
+                        display:"inline-flex",alignItems:"center",gap:6,
+                        padding:"4px 12px",borderRadius:3,fontSize:11,
+                        fontFamily:"'Space Mono',monospace",letterSpacing:".06em",
+                        background:"rgba(74,255,138,.07)",color:"#4aff8a",
+                        border:"1px solid rgba(74,255,138,.22)",
+                      }}>
+                        <span style={{width:5,height:5,borderRadius:"50%",background:"currentColor",display:"inline-block"}}/>
+                        {r.outcome}
+                      </span>
+                    </td>
+                    <td style={{padding:"14px 24px",fontSize:11,color:"var(--mars-dust)",maxWidth:280}}>
+                      {r.verdict}
+                    </td>
+                    <td style={{padding:"14px 24px",fontSize:11,fontFamily:"'Space Mono',monospace"}}>
+                      <a href={EXPLORER+"/tx/"+r.tx} target="_blank" rel="noreferrer" className="tx-link" style={{color:"var(--mars-glow)"}}>
+                        {r.tx.slice(0,8)}…{r.tx.slice(-6)}
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {/* Stats footer */}
+            <div style={{
+              padding:"13px 24px",borderTop:"1px solid rgba(196,98,45,.12)",
+              display:"flex",gap:32,flexWrap:"wrap" as const,
+              fontSize:10,color:"var(--mars-dust)",letterSpacing:".1em",textTransform:"uppercase" as const,
+            }}>
+              <span>4 reports submitted</span>
+              <span style={{color:"#4aff8a"}}>4 accepted</span>
+              <span style={{marginLeft:"auto",color:"var(--mars-pale)"}}>
+                Acceptance rate:{" "}
+                <span style={{fontFamily:"'Orbitron',monospace",color:"#4aff8a"}}>100%</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* DASHBOARD (original) */}
       <section id="dashboard" style={{padding:"100px 40px",borderTop:"1px solid rgba(196,98,45,.12)"}}>
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <div style={{fontSize:10,color:"var(--mars-glow)",letterSpacing:".2em",textTransform:"uppercase",marginBottom:14}}>Live mission data</div>
@@ -426,7 +799,7 @@ export default function Home() {
         background:"var(--mars-dark)",
       }}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <span style={{fontFamily:"'Orbitron',monospace",fontSize:12,color:"var(--mars-dust)",letterSpacing:".15em"}}>Aleph1</span>
+          <span style={{fontFamily:"'Orbitron',monospace",fontSize:12,color:"var(--mars-dust)",letterSpacing:".15em"}}>AlephRob</span>
           <span style={{fontSize:11,color:"rgba(138,90,58,.45)"}}>Built for Aleph Hackathon </span>
         </div>
         <div style={{display:"flex",gap:24}}>

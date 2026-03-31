@@ -1,4 +1,4 @@
-# Aleph1 - Mars Rover Mission — GenLayer Validator
+# AlephRob - Mars Rover Mission — GenLayer Validator
 
 Autonomous Mars rover that validates geological samples using AI consensus on GenLayer Bradbury testnet.
 

@@ -16,7 +16,7 @@ python bridge.py        # Watch Webots mission log and submit samples on-chain
 
 ```
 contracts/          # Python intelligent contracts (RoverMission)
-frontend/           # Next.js 16 app (Aleph1 rover mission dashboard)
+frontend/           # Next.js 16 app (AlephRob rover mission dashboard)
 deploy/             # TypeScript deployment script
 bridge.py           # Webots -> GenLayer submission bridge
 contract_address.txt# Last deployed contract address written by deploy script

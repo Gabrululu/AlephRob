@@ -1,6 +1,6 @@
-# Aleph1 Rover Dashboard
+# AlephRob Rover Dashboard
 
-Next.js frontend for the Aleph1 mission demo. The UI shows mission status, sample validation progress, and links to GenLayer explorer resources.
+Next.js frontend for the AlephRob mission demo. The UI shows mission status, sample validation progress, and links to GenLayer explorer resources.
 
 ## Setup
 
@@ -55,7 +55,7 @@ npm start
 
 ## Features
 
-- **Mission hero**: Aleph1 narrative and mission state.
+- **Mission hero**: AlephRob narrative and mission state.
 - **Architecture section**: Rover -> controller -> validators -> intelligent contract flow.
 - **Live telemetry**: Polls [public/mission_log.json](public/mission_log.json).
 - **Explorer integration**: Quick links to deployed contract and transactions.
