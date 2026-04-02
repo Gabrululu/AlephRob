@@ -4,6 +4,27 @@
 
 const RPC_URL = "https://rpc-bradbury.genlayer.com";
 
+// Consensus contract addresses — same chain ID (4221) as testnetAsimov in genlayer-js
+const CONSENSUS_MAIN_ADDRESS  = "0xe30293d600fF9B2C865d91307826F28006A458f4";
+const CONSENSUS_DATA_ADDRESS  = "0x2a50afD9d3E0ACC824aC4850d7B4c5561aB5D27a";
+
+// Minimal ABI — only the addTransaction function needed for write calls
+const CONSENSUS_MAIN_ABI = [
+  {
+    inputs: [
+      { internalType: "address", name: "recipient",            type: "address" },
+      { internalType: "uint256", name: "numOfInitialValidators", type: "uint256" },
+      { internalType: "uint256", name: "maxRotations",         type: "uint256" },
+      { internalType: "bytes",   name: "txData",               type: "bytes"   },
+      { internalType: "bool",    name: "leaderOnly",           type: "bool"    },
+    ],
+    name: "addTransaction",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "payable",
+    type: "function",
+  },
+] as const;
+
 export const BRADBURY_CHAIN = {
   id: 4221,
   name: "GenLayer Bradbury Testnet",
@@ -11,11 +32,11 @@ export const BRADBURY_CHAIN = {
   nativeCurrency: { name: "GEN Token", symbol: "GEN", decimals: 18 },
   blockExplorers: { default: { name: "Bradbury Explorer", url: "https://explorer-bradbury.genlayer.com" } },
   testnet: true,
-  consensusMainContract: null as unknown as `0x${string}`,
-  consensusDataContract: null as unknown as `0x${string}`,
+  consensusMainContract: { address: CONSENSUS_MAIN_ADDRESS as `0x${string}`, abi: CONSENSUS_MAIN_ABI },
+  consensusDataContract: { address: CONSENSUS_DATA_ADDRESS as `0x${string}`, abi: [] },
   defaultNumberOfInitialValidators: 5,
   defaultConsensusMaxRotations: 3,
-} as const;
+};
 
 export const CONTRACTS = {
   AGENT_REGISTRY:    "0xf39101cB9A2CD4224d0143f812B9c6CB012edDAe",
@@ -251,7 +272,20 @@ export async function getAgentReports(agentId: string): Promise<ReportData[]> {
   return read(CONTRACTS.REPUTATION_LEDGER, "get_agent_reports", [agentId]) as Promise<ReportData[]>;
 }
 
-// ── Write (requires private key) ──────────────────────────────────────────────
+// ── Write helpers ─────────────────────────────────────────────────────────────
+
+async function _glClient(extra: Record<string, unknown> = {}): Promise<Record<string, Function>> {
+  const mod = await import(/* webpackIgnore: true */ _GL_PKG) as Record<string, unknown>;
+  const createClientFn = mod.createClient as (cfg: unknown) => Record<string, unknown>;
+  return createClientFn({ chain: BRADBURY_CHAIN, ...extra }) as Record<string, Function>;
+}
+
+async function _execWrite(client: Record<string, Function>, account: unknown, address: string, functionName: string, args: unknown[]): Promise<string> {
+  const writeContractMethod = client.writeContract as (args: unknown) => Promise<string>;
+  return writeContractMethod({ account, address: address as `0x${string}`, functionName, args, value: 0n });
+}
+
+// ── Write — private key ────────────────────────────────────────────────────────
 
 export async function writeContractFn(
   privateKey: `0x${string}`,
@@ -260,16 +294,65 @@ export async function writeContractFn(
   args: unknown[] = []
 ): Promise<string> {
   const mod = await import(/* webpackIgnore: true */ _GL_PKG) as Record<string, unknown>;
-  const createClientFn = mod.createClient as (cfg: unknown) => Record<string, unknown>;
   const createAccountFn = mod.createAccount as (pk: `0x${string}`) => unknown;
   const account = createAccountFn(privateKey);
-  const client = createClientFn({ chain: BRADBURY_CHAIN });
-  const writeContractMethod = client.writeContract as (args: unknown) => Promise<string>;
-  return writeContractMethod({
-    account,
-    address: address as `0x${string}`,
-    functionName,
-    args,
-    value: 0n,
-  });
+  const client = await _glClient();
+  return _execWrite(client, account, address, functionName, args);
+}
+
+// ── Write — MetaMask / EIP-1193 provider ──────────────────────────────────────
+
+export async function writeContractWithProvider(
+  provider: unknown,          // window.ethereum
+  accountAddress: `0x${string}`,
+  address: string,
+  functionName: string,
+  args: unknown[] = []
+): Promise<string> {
+  const client = await _glClient({ provider, account: accountAddress });
+  return _execWrite(client, accountAddress, address, functionName, args);
+}
+
+// ── MetaMask connection helpers ───────────────────────────────────────────────
+
+export interface WalletConnection {
+  address: `0x${string}`;
+  provider: unknown;
+}
+
+export async function connectMetaMask(): Promise<WalletConnection> {
+  const ethereum = (window as unknown as Record<string, unknown>).ethereum;
+  if (!ethereum) throw new Error("MetaMask not detected. Install the MetaMask extension.");
+
+  // Request account access
+  const accounts = await (ethereum as { request: (a: unknown) => Promise<string[]> })
+    .request({ method: "eth_requestAccounts" });
+  if (!accounts || accounts.length === 0) throw new Error("No accounts returned.");
+
+  // Add / switch to Bradbury network
+  try {
+    await (ethereum as { request: (a: unknown) => Promise<void> }).request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: "0x107D" }],
+    });
+  } catch (switchErr: unknown) {
+    // Error 4902 = chain not added yet
+    const code = (switchErr as { code?: number })?.code;
+    if (code === 4902) {
+      await (ethereum as { request: (a: unknown) => Promise<void> }).request({
+        method: "wallet_addEthereumChain",
+        params: [{
+          chainId: "0x107D",
+          chainName: "GenLayer Bradbury Testnet",
+          rpcUrls: [RPC_URL],
+          nativeCurrency: { name: "GEN Token", symbol: "GEN", decimals: 18 },
+          blockExplorerUrls: ["https://explorer-bradbury.genlayer.com"],
+        }],
+      });
+    } else {
+      throw switchErr;
+    }
+  }
+
+  return { address: accounts[0] as `0x${string}`, provider: ethereum };
 }

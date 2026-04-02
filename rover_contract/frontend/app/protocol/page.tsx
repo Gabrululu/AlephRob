@@ -16,6 +16,8 @@ import {
   getAgentReputation,
   getAgentReports,
   writeContractFn,
+  writeContractWithProvider,
+  connectMetaMask,
   type AgentData,
   type MissionData,
   type TaskData,
@@ -31,6 +33,25 @@ const EXPLORER      = "https://explorer-bradbury.genlayer.com";
 const KNOWN_AGENTS  = ["rover-explorer-01","rover-collector-01","rover-analyst-01","rover-transporter-01"];
 const KNOWN_MISSION = "mission-olympus-01";
 const KNOWN_REPORTS = ["report-001","report-002","report-003","report-004"];
+
+// ── Wallet state ───────────────────────────────────────────────────────────────
+
+type WalletState =
+  | { type: "metamask";   address: `0x${string}`; provider: unknown }
+  | { type: "privateKey"; key: `0x${string}` }
+  | null;
+
+async function execWrite(
+  wallet: WalletState,
+  address: string,
+  method: string,
+  args: unknown[] = [],
+): Promise<string> {
+  if (!wallet) throw new Error("No wallet connected.");
+  if (wallet.type === "metamask")
+    return writeContractWithProvider(wallet.provider, wallet.address, address, method, args);
+  return writeContractFn(wallet.key, address, method, args);
+}
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -200,8 +221,8 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 
 function WalletRequired() {
   return (
-    <div style={{ padding:"16px 20px", borderRadius:4, background:"rgba(255,184,74,.05)", border:"1px solid rgba(255,184,74,.2)", fontSize:12, color:"#ffb84a", fontFamily:"'Space Mono',monospace" }}>
-      Enter a testnet private key in the wallet section above to send transactions.
+    <div style={{ marginBottom:20, padding:"14px 18px", borderRadius:4, background:"rgba(255,184,74,.05)", border:"1px solid rgba(255,184,74,.2)", fontSize:12, color:"#ffb84a", fontFamily:"'Space Mono',monospace" }}>
+      Connect a wallet above to send transactions.
     </div>
   );
 }
@@ -605,7 +626,7 @@ function MonoData({ rows }: { rows: [string, string][] }) {
 
 // ── Tab: Register Agent ─────────────────────────────────────────────────────────
 
-function RegisterAgentTab({ privateKey }: { privateKey: string }) {
+function RegisterAgentTab({ wallet }: { wallet: WalletState }) {
   const [agentId,       setAgentId]       = useState("");
   const [name,          setName]          = useState("");
   const [roverType,     setRoverType]     = useState("EXPLORER");
@@ -616,10 +637,10 @@ function RegisterAgentTab({ privateKey }: { privateKey: string }) {
 
   const submit = async () => {
     if (!agentId || !name || !capabilities) { setError("All fields required"); return; }
-    if (!privateKey) { setError("No wallet connected"); return; }
+    if (!wallet) { setError("No wallet connected"); return; }
     setSubmitting(true); setError(""); setHashes([]);
     try {
-      const h = await writeContractFn(privateKey as `0x${string}`, CONTRACTS.AGENT_REGISTRY, "register_agent", [agentId, name, roverType, capabilities]);
+      const h = await execWrite(wallet, CONTRACTS.AGENT_REGISTRY, "register_agent", [agentId, name, roverType, capabilities]);
       setHashes([h]);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setSubmitting(false); }
@@ -630,7 +651,7 @@ function RegisterAgentTab({ privateKey }: { privateKey: string }) {
   return (
     <div style={{ maxWidth:560 }}>
       <Desc>Register a new robotic agent. The LLM evaluates whether the declared capabilities are coherent for the rover type and assigns an initial reputation score (50–80).</Desc>
-      {!privateKey && <WalletRequired />}
+      {!wallet && <WalletRequired />}
       <FormGrid>
         <Field label="Agent ID"><Input value={agentId} onChange={setAgentId} placeholder="my-rover-01"/></Field>
         <Field label="Name"><Input value={name} onChange={setName} placeholder="Perseverance-2"/></Field>
@@ -644,7 +665,7 @@ function RegisterAgentTab({ privateKey }: { privateKey: string }) {
         </Field>
         <Field label="Declared capabilities" wide><Input value={capabilities} onChange={setCapabilities} placeholder="Autonomous navigation with LiDAR, stereo cameras, dust sensor…"/></Field>
       </FormGrid>
-      <Btn onClick={submit} disabled={submitting || !privateKey}>{submitting ? "Submitting…" : "Register agent →"}</Btn>
+      <Btn onClick={submit} disabled={submitting || !wallet}>{submitting ? "Submitting…" : "Register agent →"}</Btn>
       <TxList hashes={hashes} error={error} />
       <CliCmd cmd={cli} />
     </div>
@@ -653,7 +674,7 @@ function RegisterAgentTab({ privateKey }: { privateKey: string }) {
 
 // ── Tab: New Mission (create_mission + add_task chain) ─────────────────────────
 
-function NewMissionTab({ privateKey }: { privateKey: string }) {
+function NewMissionTab({ wallet }: { wallet: WalletState }) {
   const [missionId, setMissionId] = useState("");
   const [mName,     setMName]     = useState("");
   const [desc,      setDesc]      = useState("");
@@ -675,14 +696,14 @@ function NewMissionTab({ privateKey }: { privateKey: string }) {
 
   const submit = async () => {
     if (!missionId || !mName) { setError("Mission ID and name required"); return; }
-    if (!privateKey) { setError("No wallet connected"); return; }
+    if (!wallet) { setError("No wallet connected"); return; }
     setSubmitting(true); setError(""); setHashes([]); setProgress("");
 
     const collected: string[] = [];
     try {
       // Step 1: create_mission
       setProgress("Creating mission…");
-      const h0 = await writeContractFn(privateKey as `0x${string}`, CONTRACTS.MISSION_FACTORY, "create_mission", [missionId, mName, desc]);
+      const h0 = await execWrite(wallet, CONTRACTS.MISSION_FACTORY, "create_mission", [missionId, mName, desc]);
       collected.push(h0);
       setHashes([...collected]);
 
@@ -690,7 +711,7 @@ function NewMissionTab({ privateKey }: { privateKey: string }) {
       for (let i = 0; i < validTasks.length; i++) {
         const t = validTasks[i];
         setProgress(`Adding task ${i+1} / ${validTasks.length} — ${t.taskId}…`);
-        const h = await writeContractFn(privateKey as `0x${string}`, CONTRACTS.MISSION_FACTORY, "add_task", [
+        const h = await execWrite(wallet, CONTRACTS.MISSION_FACTORY, "add_task", [
           missionId, t.taskId, t.taskType, t.taskDesc, t.agentId, t.minRep || "0", t.dependsOn,
         ]);
         collected.push(h);
@@ -710,7 +731,7 @@ function NewMissionTab({ privateKey }: { privateKey: string }) {
   return (
     <div style={{ maxWidth:720 }}>
       <Desc>Create a mission and chain its tasks on-chain in a single flow. Each task is sent as a separate transaction after the mission is created. Tasks with dependencies are submitted in order.</Desc>
-      {!privateKey && <WalletRequired />}
+      {!wallet && <WalletRequired />}
       <FormGrid>
         <Field label="Mission ID"><Input value={missionId} onChange={setMissionId} placeholder="mission-mons-02"/></Field>
         <Field label="Name"><Input value={mName} onChange={setMName} placeholder="Olympus Mons Survey II"/></Field>
@@ -747,7 +768,7 @@ function NewMissionTab({ privateKey }: { privateKey: string }) {
       </div>
 
       {progress && <div style={{ fontSize:11, color:"#ffb84a", fontFamily:"'Space Mono',monospace", marginBottom:10 }}>{progress}</div>}
-      <Btn onClick={submit} disabled={submitting || !privateKey}>
+      <Btn onClick={submit} disabled={submitting || !wallet}>
         {submitting ? "Sending…" : `Create mission + ${validTasks.length} task${validTasks.length !== 1 ? "s" : ""} →`}
       </Btn>
       <TxList hashes={hashes} error={error} />
@@ -758,7 +779,7 @@ function NewMissionTab({ privateKey }: { privateKey: string }) {
 
 // ── Tab: Start Task ─────────────────────────────────────────────────────────────
 
-function StartTaskTab({ privateKey }: { privateKey: string }) {
+function StartTaskTab({ wallet }: { wallet: WalletState }) {
   const [taskId,   setTaskId]   = useState("");
   const [checking, setChecking] = useState(false);
   const [canStart, setCanStart] = useState<CanStartResult | null>(null);
@@ -775,10 +796,10 @@ function StartTaskTab({ privateKey }: { privateKey: string }) {
 
   const submit = async () => {
     if (!taskId) { setError("Task ID required"); return; }
-    if (!privateKey) { setError("No wallet connected"); return; }
+    if (!wallet) { setError("No wallet connected"); return; }
     setSubmitting(true); setError(""); setHashes([]);
     try {
-      const h = await writeContractFn(privateKey as `0x${string}`, CONTRACTS.MISSION_FACTORY, "start_task", [taskId]);
+      const h = await execWrite(wallet, CONTRACTS.MISSION_FACTORY, "start_task", [taskId]);
       setHashes([h]);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setSubmitting(false); }
@@ -789,7 +810,7 @@ function StartTaskTab({ privateKey }: { privateKey: string }) {
   return (
     <div style={{ maxWidth:480 }}>
       <Desc>Mark a task as IN_PROGRESS. The contract verifies that the dependent task is COMPLETED before allowing the transition. Required before submitting a task result.</Desc>
-      {!privateKey && <WalletRequired />}
+      {!wallet && <WalletRequired />}
       <FormGrid>
         <Field label="Task ID" wide>
           <div style={{ display:"flex", gap:8 }}>
@@ -815,7 +836,7 @@ function StartTaskTab({ privateKey }: { privateKey: string }) {
         </div>
       )}
 
-      <Btn onClick={submit} disabled={submitting || !privateKey || (canStart !== null && !canStart.can_start)}>
+      <Btn onClick={submit} disabled={submitting || !wallet || (canStart !== null && !canStart.can_start)}>
         {submitting ? "Submitting…" : "Start task →"}
       </Btn>
       <TxList hashes={hashes} error={error} />
@@ -826,7 +847,7 @@ function StartTaskTab({ privateKey }: { privateKey: string }) {
 
 // ── Tab: Submit Task Result ─────────────────────────────────────────────────────
 
-function SubmitTaskTab({ privateKey }: { privateKey: string }) {
+function SubmitTaskTab({ wallet }: { wallet: WalletState }) {
   const [missionId,  setMissionId]  = useState("");
   const [taskId,     setTaskId]     = useState("");
   const [agentName,  setAgentName]  = useState("");
@@ -837,10 +858,10 @@ function SubmitTaskTab({ privateKey }: { privateKey: string }) {
 
   const submit = async () => {
     if (!missionId || !taskId || !agentName || !resultData) { setError("All fields required"); return; }
-    if (!privateKey) { setError("No wallet connected"); return; }
+    if (!wallet) { setError("No wallet connected"); return; }
     setSubmitting(true); setError(""); setHashes([]);
     try {
-      const h = await writeContractFn(privateKey as `0x${string}`, CONTRACTS.MISSION_FACTORY, "submit_task_result", [missionId, taskId, agentName, resultData]);
+      const h = await execWrite(wallet, CONTRACTS.MISSION_FACTORY, "submit_task_result", [missionId, taskId, agentName, resultData]);
       setHashes([h]);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setSubmitting(false); }
@@ -854,14 +875,14 @@ function SubmitTaskTab({ privateKey }: { privateKey: string }) {
       <div style={{ padding:"10px 16px", marginBottom:18, borderRadius:4, background:"rgba(255,184,74,.04)", border:"1px solid rgba(255,184,74,.15)", fontSize:11, color:"#ffb84a", fontFamily:"'Space Mono',monospace" }}>
         Flow: Start Task → Submit Task Result
       </div>
-      {!privateKey && <WalletRequired />}
+      {!wallet && <WalletRequired />}
       <FormGrid>
         <Field label="Mission ID"><Input value={missionId} onChange={setMissionId} placeholder="mission-olympus-01"/></Field>
         <Field label="Task ID"><Input value={taskId} onChange={setTaskId} placeholder="task-explore-01"/></Field>
         <Field label="Agent name" wide><Input value={agentName} onChange={setAgentName} placeholder="Sojourner-X"/></Field>
         <Field label="Result data" wide><Input value={resultData} onChange={setResultData} placeholder="Terrain mapped at (-0.82, 0.07). 3 geological targets identified…"/></Field>
       </FormGrid>
-      <Btn onClick={submit} disabled={submitting || !privateKey}>{submitting ? "Submitting…" : "Submit result →"}</Btn>
+      <Btn onClick={submit} disabled={submitting || !wallet}>{submitting ? "Submitting…" : "Submit result →"}</Btn>
       <TxList hashes={hashes} error={error} />
       <CliCmd cmd={cli} />
     </div>
@@ -870,7 +891,7 @@ function SubmitTaskTab({ privateKey }: { privateKey: string }) {
 
 // ── Tab: Update Reputation ──────────────────────────────────────────────────────
 
-function UpdateReputationTab({ privateKey }: { privateKey: string }) {
+function UpdateReputationTab({ wallet }: { wallet: WalletState }) {
   const [agentId,  setAgentId]  = useState("");
   const [success,  setSuccess]  = useState(true);
   const [notes,    setNotes]    = useState("");
@@ -880,10 +901,10 @@ function UpdateReputationTab({ privateKey }: { privateKey: string }) {
 
   const submit = async () => {
     if (!agentId || !notes) { setError("Agent ID and performance notes required"); return; }
-    if (!privateKey) { setError("No wallet connected"); return; }
+    if (!wallet) { setError("No wallet connected"); return; }
     setSubmitting(true); setError(""); setHashes([]);
     try {
-      const h = await writeContractFn(privateKey as `0x${string}`, CONTRACTS.AGENT_REGISTRY, "update_reputation", [agentId, success, notes]);
+      const h = await execWrite(wallet, CONTRACTS.AGENT_REGISTRY, "update_reputation", [agentId, success, notes]);
       setHashes([h]);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setSubmitting(false); }
@@ -894,7 +915,7 @@ function UpdateReputationTab({ privateKey }: { privateKey: string }) {
   return (
     <div style={{ maxWidth:560 }}>
       <Desc>Update a rover's reputation after mission completion. The LLM evaluates performance notes to calculate the delta: +1 to +10 on success, -5 to -20 on failure. Agents below 20 rep are automatically suspended.</Desc>
-      {!privateKey && <WalletRequired />}
+      {!wallet && <WalletRequired />}
       <FormGrid>
         <Field label="Agent ID" wide><Input value={agentId} onChange={setAgentId} placeholder="rover-explorer-01"/></Field>
         <Field label="Mission outcome" wide>
@@ -910,7 +931,7 @@ function UpdateReputationTab({ privateKey }: { privateKey: string }) {
         </Field>
         <Field label="Performance notes" wide><Input value={notes} onChange={setNotes} placeholder="Completed terrain mapping ahead of schedule, all 3 targets identified with high precision…"/></Field>
       </FormGrid>
-      <Btn onClick={submit} disabled={submitting || !privateKey} variant={success ? "primary" : "danger"}>
+      <Btn onClick={submit} disabled={submitting || !wallet} variant={success ? "primary" : "danger"}>
         {submitting ? "Submitting…" : `Update reputation (${success ? "success" : "failure"}) →`}
       </Btn>
       <TxList hashes={hashes} error={error} />
@@ -921,7 +942,7 @@ function UpdateReputationTab({ privateKey }: { privateKey: string }) {
 
 // ── Tab: Peer Report ────────────────────────────────────────────────────────────
 
-function PeerReportTab({ privateKey }: { privateKey: string }) {
+function PeerReportTab({ wallet }: { wallet: WalletState }) {
   const [reporter,  setReporter]  = useState("");
   const [target,    setTarget]    = useState("");
   const [missionId, setMissionId] = useState("");
@@ -936,10 +957,10 @@ function PeerReportTab({ privateKey }: { privateKey: string }) {
 
   const submit = async () => {
     if (!reporter || !target || !quality) { setError("Reporter, target and result quality required"); return; }
-    if (!privateKey) { setError("No wallet connected"); return; }
+    if (!wallet) { setError("No wallet connected"); return; }
     setSubmitting(true); setError(""); setHashes([]);
     try {
-      const h = await writeContractFn(privateKey as `0x${string}`, CONTRACTS.REPUTATION_LEDGER, "submit_report", [reporter, target, missionId, taskId, outcome, quality, execTime, envNotes]);
+      const h = await execWrite(wallet, CONTRACTS.REPUTATION_LEDGER, "submit_report", [reporter, target, missionId, taskId, outcome, quality, execTime, envNotes]);
       setHashes([h]);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setSubmitting(false); }
@@ -950,7 +971,7 @@ function PeerReportTab({ privateKey }: { privateKey: string }) {
   return (
     <div style={{ maxWidth:580 }}>
       <Desc>Submit a peer-to-peer performance report. The LLM evaluates quality, environment conditions, timing and historical context. Suspicious or biased reports are rejected with delta = 0.</Desc>
-      {!privateKey && <WalletRequired />}
+      {!wallet && <WalletRequired />}
       <FormGrid>
         <Field label="Reporter agent"><Input value={reporter} onChange={setReporter} placeholder="rover-explorer-01"/></Field>
         <Field label="Target agent"><Input value={target} onChange={setTarget} placeholder="rover-collector-01"/></Field>
@@ -967,7 +988,7 @@ function PeerReportTab({ privateKey }: { privateKey: string }) {
         <Field label="Execution time"><Input value={execTime} onChange={setExecTime} placeholder="45 min, ahead of schedule"/></Field>
         <Field label="Environment notes"><Input value={envNotes} onChange={setEnvNotes} placeholder="Dust storm, low visibility"/></Field>
       </FormGrid>
-      <Btn onClick={submit} disabled={submitting || !privateKey}>{submitting ? "Submitting…" : "Submit report →"}</Btn>
+      <Btn onClick={submit} disabled={submitting || !wallet}>{submitting ? "Submitting…" : "Submit report →"}</Btn>
       <TxList hashes={hashes} error={error} />
       <CliCmd cmd={cli} />
     </div>
@@ -993,7 +1014,7 @@ function Field({ label, children, wide }: { label: string; children: React.React
 
 // ── Tab: Admin (set_status) ─────────────────────────────────────────────────────
 
-function AdminTab({ privateKey }: { privateKey: string }) {
+function AdminTab({ wallet }: { wallet: WalletState }) {
   const [agentId,    setAgentId]    = useState("");
   const [newStatus,  setNewStatus]  = useState("ACTIVE");
   const [submitting, setSubmitting] = useState(false);
@@ -1008,15 +1029,10 @@ function AdminTab({ privateKey }: { privateKey: string }) {
 
   const submit = async () => {
     if (!agentId) { setError("Agent ID required"); return; }
-    if (!privateKey) { setError("No wallet connected"); return; }
+    if (!wallet) { setError("No wallet connected"); return; }
     setSubmitting(true); setError(""); setHashes([]);
     try {
-      const h = await writeContractFn(
-        privateKey as `0x${string}`,
-        CONTRACTS.AGENT_REGISTRY,
-        "set_status",
-        [agentId, newStatus],
-      );
+      const h = await execWrite(wallet, CONTRACTS.AGENT_REGISTRY, "set_status", [agentId, newStatus]);
       setHashes([h]);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setSubmitting(false); }
@@ -1049,7 +1065,7 @@ function AdminTab({ privateKey }: { privateKey: string }) {
         <div style={{ fontSize:10, color:"var(--mars-glow)", letterSpacing:".16em", textTransform:"uppercase", marginBottom:16 }}>
           Set agent status
         </div>
-        {!privateKey && <WalletRequired />}
+        {!wallet && <WalletRequired />}
         <FormGrid>
           <Field label="Agent ID"><Input value={agentId} onChange={setAgentId} placeholder="rover-explorer-01"/></Field>
           <Field label="New status">
@@ -1084,7 +1100,7 @@ function AdminTab({ privateKey }: { privateKey: string }) {
 
         <Btn
           onClick={submit}
-          disabled={submitting || !privateKey}
+          disabled={submitting || !wallet}
           variant={newStatus === "SUSPENDED" ? "danger" : "primary"}
         >
           {submitting ? "Submitting…" : `Set status → ${newStatus}`}
@@ -1146,10 +1162,38 @@ const TABS: { id: MainTab; label: string; write: boolean }[] = [
 ];
 
 export default function ProtocolPage() {
-  const [mainTab,    setMainTab]    = useState<MainTab>("state");
-  const [privateKey, setPrivateKey] = useState("");
-  const [pkVisible,  setPkVisible]  = useState(false);
-  const connected = privateKey.startsWith("0x") && privateKey.length === 66;
+  const [mainTab,         setMainTab]         = useState<MainTab>("state");
+  const [wallet,          setWallet]          = useState<WalletState>(null);
+  const [connecting,      setConnecting]      = useState(false);
+  const [connectErr,      setConnectErr]      = useState("");
+  const [pkInput,         setPkInput]         = useState("");
+  const [pkVisible,       setPkVisible]       = useState(false);
+  const [showPkFallback,  setShowPkFallback]  = useState(false);
+
+  const connected = wallet !== null;
+
+  async function handleConnectMetaMask() {
+    setConnecting(true);
+    setConnectErr("");
+    try {
+      const { address, provider } = await connectMetaMask();
+      setWallet({ type: "metamask", address, provider });
+    } catch (e: unknown) {
+      setConnectErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  function handleUsePk() {
+    const key = pkInput.trim() as `0x${string}`;
+    if (!key.startsWith("0x") || key.length !== 66) {
+      setConnectErr("Invalid private key — must be 0x + 64 hex chars");
+      return;
+    }
+    setWallet({ type: "privateKey", key });
+    setConnectErr("");
+  }
 
   return (
     <>
@@ -1220,23 +1264,58 @@ export default function ProtocolPage() {
         <div style={{ padding:"16px 40px", background:"rgba(196,98,45,.025)", borderBottom:"1px solid rgba(196,98,45,.1)" }}>
           <div style={{ maxWidth:1100, margin:"0 auto", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
             <div style={{ fontSize:9, color:"var(--mars-dust)", letterSpacing:".1em", textTransform:"uppercase", flexShrink:0 }}>Testnet wallet</div>
-            <div style={{ flex:"1 1 280px", maxWidth:400, position:"relative" }}>
-              <input
-                type={pkVisible ? "text" : "password"}
-                value={privateKey}
-                onChange={(e) => setPrivateKey(e.target.value)}
-                placeholder="0x… private key (Bradbury testnet only)"
-                style={{ width:"100%", padding:"8px 40px 8px 12px", background:"rgba(0,0,0,.3)", border:"1px solid rgba(196,98,45,.28)", borderRadius:4, color:"var(--mars-pale)", fontFamily:"'Space Mono',monospace", fontSize:11, outline:"none" }}
-              />
-              <button onClick={() => setPkVisible(v => !v)} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"var(--mars-dust)", fontSize:10, fontFamily:"'Space Mono',monospace" }}>
-                {pkVisible ? "hide" : "show"}
-              </button>
-            </div>
-            <div style={{ fontSize:10, color: connected ? "#4aff8a" : "rgba(138,90,58,.5)" }}>
-              {connected ? "✓ Ready to sign" : "Required for write operations"}
-            </div>
-            <div style={{ marginLeft:"auto", fontSize:9, color:"rgba(138,90,58,.35)" }}>Key is never stored or sent to any server · testnet only</div>
+
+            {wallet ? (
+              <>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ width:7, height:7, borderRadius:"50%", background:"#4aff8a" }}/>
+                  <span style={{ fontSize:10, color:"#4aff8a", fontFamily:"'Space Mono',monospace" }}>
+                    {wallet.type === "metamask" ? `MetaMask · ${wallet.address.slice(0,6)}…${wallet.address.slice(-4)}` : `PK · ${wallet.key.slice(0,6)}…${wallet.key.slice(-4)}`}
+                  </span>
+                </div>
+                <button onClick={() => { setWallet(null); setPkInput(""); setConnectErr(""); setShowPkFallback(false); }}
+                  style={{ padding:"5px 12px", background:"none", border:"1px solid rgba(196,98,45,.35)", borderRadius:4, color:"var(--mars-dust)", fontFamily:"'Space Mono',monospace", fontSize:10, cursor:"pointer" }}>
+                  disconnect
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={handleConnectMetaMask} disabled={connecting}
+                  style={{ padding:"8px 18px", background:"var(--mars-glow)", border:"none", borderRadius:4, color:"var(--mars-deep)", fontFamily:"'Space Mono',monospace", fontSize:11, fontWeight:700, cursor:"pointer", opacity: connecting ? .6 : 1 }}>
+                  {connecting ? "connecting…" : "Connect MetaMask"}
+                </button>
+                <button onClick={() => setShowPkFallback(v => !v)}
+                  style={{ padding:"5px 10px", background:"none", border:"1px solid rgba(196,98,45,.28)", borderRadius:4, color:"var(--mars-dust)", fontFamily:"'Space Mono',monospace", fontSize:9, cursor:"pointer", letterSpacing:".06em" }}>
+                  {showPkFallback ? "▲ hide" : "▼ private key"}
+                </button>
+              </>
+            )}
+
+            {connectErr && <span style={{ fontSize:10, color:"#ff6b6b" }}>{connectErr}</span>}
+            {!wallet && <div style={{ marginLeft:"auto", fontSize:9, color:"rgba(138,90,58,.35)" }}>Required for write operations</div>}
           </div>
+
+          {showPkFallback && !wallet && (
+            <div style={{ maxWidth:1100, margin:"10px auto 0", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+              <div style={{ flex:"1 1 280px", maxWidth:400, position:"relative" }}>
+                <input
+                  type={pkVisible ? "text" : "password"}
+                  value={pkInput}
+                  onChange={(e) => setPkInput(e.target.value)}
+                  placeholder="0x… private key (Bradbury testnet only)"
+                  style={{ width:"100%", padding:"8px 40px 8px 12px", background:"rgba(0,0,0,.3)", border:"1px solid rgba(196,98,45,.28)", borderRadius:4, color:"var(--mars-pale)", fontFamily:"'Space Mono',monospace", fontSize:11, outline:"none" }}
+                />
+                <button onClick={() => setPkVisible(v => !v)} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"var(--mars-dust)", fontSize:10, fontFamily:"'Space Mono',monospace" }}>
+                  {pkVisible ? "hide" : "show"}
+                </button>
+              </div>
+              <button onClick={handleUsePk}
+                style={{ padding:"8px 14px", background:"rgba(196,98,45,.18)", border:"1px solid rgba(196,98,45,.45)", borderRadius:4, color:"var(--mars-pale)", fontFamily:"'Space Mono',monospace", fontSize:10, cursor:"pointer" }}>
+                use key
+              </button>
+              <span style={{ fontSize:9, color:"rgba(138,90,58,.35)" }}>Key never stored or sent to any server · testnet only</span>
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -1254,13 +1333,13 @@ export default function ProtocolPage() {
         {/* Content */}
         <div style={{ maxWidth:1100, margin:"0 auto", padding:"44px 40px 100px" }}>
           {mainTab === "state"      && <ChainStateTab />}
-          {mainTab === "register"   && <RegisterAgentTab   privateKey={privateKey} />}
-          {mainTab === "mission"    && <NewMissionTab       privateKey={privateKey} />}
-          {mainTab === "start"      && <StartTaskTab        privateKey={privateKey} />}
-          {mainTab === "task"       && <SubmitTaskTab        privateKey={privateKey} />}
-          {mainTab === "reputation" && <UpdateReputationTab privateKey={privateKey} />}
-          {mainTab === "report"     && <PeerReportTab       privateKey={privateKey} />}
-          {mainTab === "admin"      && <AdminTab            privateKey={privateKey} />}
+          {mainTab === "register"   && <RegisterAgentTab   wallet={wallet} />}
+          {mainTab === "mission"    && <NewMissionTab       wallet={wallet} />}
+          {mainTab === "start"      && <StartTaskTab        wallet={wallet} />}
+          {mainTab === "task"       && <SubmitTaskTab        wallet={wallet} />}
+          {mainTab === "reputation" && <UpdateReputationTab wallet={wallet} />}
+          {mainTab === "report"     && <PeerReportTab       wallet={wallet} />}
+          {mainTab === "admin"      && <AdminTab            wallet={wallet} />}
         </div>
       </main>
 
