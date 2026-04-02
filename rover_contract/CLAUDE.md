@@ -9,7 +9,13 @@ npm run deploy          # Deploy contracts via GenLayer CLI
 npm run dev             # Start frontend dev server (cd frontend && npm run dev)
 npm run build           # Build frontend for production
 genlayer network        # Select network (studionet/localnet/testnet-bradbury)
-python bridge.py        # Watch Webots mission log and submit samples on-chain
+
+# Bridge (root)
+python bridge.py                          # Phase 1: watch mission_log → submit_sample
+python bridge.py --phase 2               # Phase 2: start_task → submit_task_result → update_reputation
+python bridge.py --phase both            # Both phases simultaneously
+python bridge.py --status                # Print live on-chain state (no writes)
+python bridge.py --dry-run --phase 2     # Preview CLI commands without executing
 ```
 
 ## Repository structure
@@ -21,17 +27,17 @@ contracts/
   mission_factory.py      # Phase 2 — mission creation + chained task validation
   reputation_ledger.py    # Phase 2 — peer-to-peer performance reports
 frontend/
-  app/page.tsx            # Full dashboard: fleet + mission + ledger + live telemetry
-  app/layout.tsx          # Metadata and HTML shell
-  app/globals.css         # Global styles
-  public/mission_log.json # Written by rover controller in real time
+  app/
+    page.tsx              # Main demo: fleet + mission + ledger + live telemetry (hardcoded TX data)
+    protocol/page.tsx     # Protocol Explorer: live chain reads + all write interactions
+  lib/genlayer/
+    contracts.ts          # GenLayer JSON-RPC client — all read + write functions
+  public/
+    mission_log.json      # Written by rover controller in real time
 deploy/
   deployScript.ts         # TypeScript deployment script for GenLayer CLI
-controllers/
-  rover_explorer/
-    rover_explorer.py     # Autonomous Webots rover controller (Perceive→Decide→Act)
-bridge.py                 # Webots → GenLayer submission bridge
-contract_address.txt      # Last deployed contract address (written by deploy script)
+bridge.py                 # Webots → GenLayer bridge (Phase 1 + Phase 2)
+.env                      # PRIVATE_KEY + bridge config (copy from .env, fill PRIVATE_KEY)
 ```
 
 ## Deployed contracts — Bradbury testnet (Chain ID: 4221)
@@ -49,9 +55,19 @@ Explorer: https://explorer-bradbury.genlayer.com
 
 1. Set network: `genlayer network set testnet-bradbury`
 2. Deploy a contract: `genlayer deploy --contract contracts/agent_registry.py`
-3. Confirm address in output, update `contract_address.txt` if needed
-4. Run frontend: `cd frontend && npm run dev`
-5. Optional bridge: set `PRIVATE_KEY` env var and run `python bridge.py`
+3. Run frontend: `cd frontend && npm run dev`
+   - `/`         → rover demo (mission + fleet + ledger + live telemetry)
+   - `/protocol` → protocol explorer (live reads + all write interactions)
+4. Bridge: fill `PRIVATE_KEY` in `.env`, then `python bridge.py [--phase 1|2|both]`
+
+### Bridge environment
+```bash
+cp .env .env.local          # never commit .env.local
+# edit PRIVATE_KEY=0x...
+export $(cat .env.local | grep -v '#' | xargs)
+python bridge.py --status   # verify chain connectivity
+python bridge.py --dry-run  # preview without sending TXs
+```
 
 ## Contract development
 

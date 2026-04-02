@@ -4,6 +4,19 @@
 
 const RPC_URL = "https://rpc-bradbury.genlayer.com";
 
+export const BRADBURY_CHAIN = {
+  id: 4221,
+  name: "GenLayer Bradbury Testnet",
+  rpcUrls: { default: { http: [RPC_URL] } },
+  nativeCurrency: { name: "GEN Token", symbol: "GEN", decimals: 18 },
+  blockExplorers: { default: { name: "Bradbury Explorer", url: "https://explorer-bradbury.genlayer.com" } },
+  testnet: true,
+  consensusMainContract: null as unknown as `0x${string}`,
+  consensusDataContract: null as unknown as `0x${string}`,
+  defaultNumberOfInitialValidators: 5,
+  defaultConsensusMaxRotations: 3,
+} as const;
+
 export const CONTRACTS = {
   AGENT_REGISTRY:    "0xf39101cB9A2CD4224d0143f812B9c6CB012edDAe",
   MISSION_FACTORY:   "0xfdca4ab91E9c49f4f466F47F5adB9e34B3Eb5Ed6",
@@ -178,4 +191,84 @@ export async function getLedgerStats(): Promise<LedgerStats> {
 
 export async function getReport(reportId: string): Promise<ReportData> {
   return read(CONTRACTS.REPUTATION_LEDGER, "get_report", [reportId]) as Promise<ReportData>;
+}
+
+// ── MissionFactory extra reads ─────────────────────────────────────────────────
+
+export interface FactoryStats {
+  total_missions: number | bigint;
+  total_tasks: number | bigint;
+  completed_missions: number | bigint;
+  failed_missions: number | bigint;
+  protocol: string;
+}
+
+export interface CanStartResult {
+  can_start: boolean;
+  reason: string;
+  task_status: string;
+  dependency_status: string;
+}
+
+export async function getTask(taskId: string): Promise<TaskData> {
+  return read(CONTRACTS.MISSION_FACTORY, "get_task", [taskId]) as Promise<TaskData>;
+}
+
+export async function getFactoryStats(): Promise<FactoryStats> {
+  return read(CONTRACTS.MISSION_FACTORY, "get_factory_stats") as Promise<FactoryStats>;
+}
+
+export async function canStartTask(taskId: string): Promise<CanStartResult> {
+  return read(CONTRACTS.MISSION_FACTORY, "can_start_task", [taskId]) as Promise<CanStartResult>;
+}
+
+// ── AgentRegistry extra reads ──────────────────────────────────────────────────
+
+export async function getAgentsByOwner(ownerAddress: string): Promise<string[]> {
+  return read(CONTRACTS.AGENT_REGISTRY, "get_agents_by_owner", [ownerAddress]) as Promise<string[]>;
+}
+
+export async function isEligible(agentId: string, minReputation: number): Promise<boolean> {
+  return read(CONTRACTS.AGENT_REGISTRY, "is_eligible", [agentId, minReputation]) as Promise<boolean>;
+}
+
+// ── ReputationLedger extra reads ───────────────────────────────────────────────
+
+export interface AgentReputation {
+  agent_id: string;
+  current_reputation: number | bigint;
+  total_reports_received: number | bigint;
+  accepted_reports: number | bigint;
+  last_report_id: string;
+}
+
+export async function getAgentReputation(agentId: string): Promise<AgentReputation> {
+  return read(CONTRACTS.REPUTATION_LEDGER, "get_agent_reputation", [agentId]) as Promise<AgentReputation>;
+}
+
+export async function getAgentReports(agentId: string): Promise<ReportData[]> {
+  return read(CONTRACTS.REPUTATION_LEDGER, "get_agent_reports", [agentId]) as Promise<ReportData[]>;
+}
+
+// ── Write (requires private key) ──────────────────────────────────────────────
+
+export async function writeContractFn(
+  privateKey: `0x${string}`,
+  address: string,
+  functionName: string,
+  args: unknown[] = []
+): Promise<string> {
+  const mod = await import("genlayer-js" as string) as Record<string, unknown>;
+  const createClientFn = mod.createClient as (cfg: unknown) => Record<string, unknown>;
+  const createAccountFn = mod.createAccount as (pk: `0x${string}`) => unknown;
+  const account = createAccountFn(privateKey);
+  const client = createClientFn({ chain: BRADBURY_CHAIN });
+  const writeContractMethod = client.writeContract as (args: unknown) => Promise<string>;
+  return writeContractMethod({
+    account,
+    address: address as `0x${string}`,
+    functionName,
+    args,
+    value: 0n,
+  });
 }

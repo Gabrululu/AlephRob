@@ -275,6 +275,7 @@ export default function Home() {
         <a href="#tech" className="nav-link">Architecture</a>
         <a href="#fleet" className="nav-link">Fleet</a>
         <a href="#dashboard" className="nav-link">Live data</a>
+        <a href="/protocol" className="nav-link">Protocol</a>
         <a href={EXPLORER+"/address/"+CONTRACT} target="_blank" rel="noreferrer" className="nav-link" style={{color:"var(--mars-glow)"}}>
           Explorer ↗
         </a>

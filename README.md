@@ -2,7 +2,7 @@
 
 > Autonomous robotic agents that execute complex missions on Mars, coordinated and validated by AI consensus on GenLayer Bradbury testnet.
 
-Built for **Aleph Hackathon** (Robotics + GenLayer tracks) and extended for the **GenLayer Hackathon** (Agentic Economy Infrastructure track).
+Built for **Aleph Hackathon** (Robotics + GenLayer tracks), **GenLayer Bradbury Hackathon** (Agentic Economy Infrastructure track), and **PL Genesis**.
 
 ---
 
@@ -25,12 +25,15 @@ Mission complete → peer robots report performance → reputation updated on-ch
 ### Phase 1 — Aleph Hackathon 🏆
 **Tracks:** Robotics (1st place) + GenLayer
 
-Single Sojourner rover navigating Mars terrain, collecting 3 geological samples, each validated by 5 LLM validators on Bradbury testnet.
+Single Sojourner rover navigating Mars terrain, collecting 3 geological samples, each validated by 5 LLM validators on Bradbury testnet. Rover autonomously returns to the initial base position after completing all collections.
 
-### Phase 2 — GenLayer Hackathon
+### Phase 2 — GenLayer Bradbury Hackathon
 **Track:** Agentic Economy Infrastructure
 
 Full multi-robot protocol: 4 specialized rovers with on-chain identity, reputation, and coordinated mission execution. 3 Intelligent Contracts composing a complete agentic economy for robotic fleets.
+
+### Phase 3 — PL Genesis
+Full protocol with interactive explorer: live chain reads from all 3 contracts, write interactions from the browser (register agents, create missions, submit task results, update reputation, peer reports), and a bridge connecting the Webots simulation to the Phase 2 protocol contracts.
 
 ---
 
@@ -104,7 +107,7 @@ Full multi-robot protocol: 4 specialized rovers with on-chain identity, reputati
 
 ---
 
-## Phase 2 — GenLayer Hackathon demo
+## Phase 2 — GenLayer Bradbury Hackathon demo
 
 ### Registered agents
 
@@ -140,26 +143,33 @@ Full multi-robot protocol: 4 specialized rovers with on-chain identity, reputati
 ## Project structure
 
 ```
-alephrob/
+rover_contract/
 ├── contracts/
 │   ├── rover_mission.py       # Phase 1 — sample validation
 │   ├── agent_registry.py      # Phase 2 — robot registration + reputation
 │   ├── mission_factory.py     # Phase 2 — mission creation + task chaining
 │   └── reputation_ledger.py   # Phase 2 — peer-to-peer performance reports
-├── deploy/
-│   └── deployScript.ts        # Bradbury deploy script
 ├── frontend/
 │   ├── app/
-│   │   ├── page.tsx           # Full dashboard (fleet + mission + ledger + live)
+│   │   ├── page.tsx           # Mission demo (fleet + mission + ledger + live telemetry)
+│   │   ├── protocol/
+│   │   │   └── page.tsx       # Protocol Explorer (live reads + all write interactions)
 │   │   ├── layout.tsx
 │   │   └── globals.css
+│   ├── lib/genlayer/
+│   │   └── contracts.ts       # GenLayer RPC client — typed reads + write transactions
 │   └── public/
-│       └── mission_log.json   # Written by rover in real time
+│       └── mission_log.json   # Written by rover controller in real time
+├── deploy/
+│   └── deployScript.ts        # Bradbury deploy script
+├── bridge.py                  # Webots → GenLayer bridge (Phase 1 + Phase 2)
+└── .env                       # PRIVATE_KEY + bridge configuration
+nasa/
 ├── controllers/
 │   └── rover_explorer/
 │       └── rover_explorer.py  # Autonomous rover controller (Webots)
-├── bridge.py                  # Python bridge Webots → GenLayer
-└── README.md
+└── worlds/
+    └── sojourner.wbt          # Mars terrain simulation world
 ```
 
 ---
@@ -180,14 +190,15 @@ def register_agent(self, agent_id, name, rover_type, capabilities) -> str:
 
 ### 2. Mission execution (MissionFactory)
 
-Missions are composed of tasks with hard dependencies — a collector cannot start until the explorer has completed and been validated. Each task result is evaluated by LLM consensus before the next task is unlocked.
+Missions are composed of tasks with hard dependencies — a collector cannot start until the explorer has completed and been validated. Each task follows a 3-step flow before the next task is unlocked:
 
-```python
-@gl.public.write
-def submit_task_result(self, mission_id, task_id, agent_name, result_data) -> str:
-    validation = self._validate_task_result(task_type, description, agent_name, result_data)
-    # gl.eq_principle.strict_eq → 5 validators validate the result
-    # COMPLETED unlocks the next task / FAILED halts the mission
+```
+create_mission → add_task(s) → start_task → submit_task_result
+                                             ↓
+                               LLM validates result (5 validators)
+                                             ↓
+                               COMPLETED → next task unlocked
+                               FAILED    → mission halted
 ```
 
 ### 3. Peer reputation (ReputationLedger)
@@ -205,11 +216,29 @@ def submit_report(self, reporter_agent, target_agent, outcome,
 
 ### 4. Robot simulation (Webots)
 
-The NASA Sojourner rover runs in Webots R2025a with a Perceive → Decide → Act control loop, auto-calibrating heading, PD navigation controller, and stuck detection with escape maneuvers. Results are written to `mission_log.json` for the live dashboard.
+The NASA Sojourner rover runs in Webots R2025a with a Perceive → Decide → Act control loop, auto-calibrating heading, PD navigation controller, and stuck detection with escape maneuvers. After collecting all geological samples, the rover autonomously returns to the initial base position. Results are written to `mission_log.json` for the live dashboard.
 
-### 5. Live dashboard (Next.js)
+### 5. Webots → Protocol bridge
 
-The frontend displays all 3 protocol layers: agent fleet with reputation scores, mission timeline with LLM validation notes, and peer reputation ledger — all linked to the Bradbury explorer with real TX hashes.
+`bridge.py` watches `mission_log.json` and submits rover data on-chain automatically:
+
+```bash
+# Phase 1: submit each sample to RoverMission as it's collected
+python bridge.py
+
+# Phase 2: full protocol sequence (start_task → submit_task_result → update_reputation)
+python bridge.py --phase 2
+
+# Preview without sending transactions
+python bridge.py --phase 2 --dry-run
+
+# Check live on-chain state
+python bridge.py --status
+```
+
+### 6. Protocol Explorer (Next.js — `/protocol`)
+
+Interactive interface for the full protocol: live chain state from all 3 contracts with 30s auto-refresh, and write interactions for every protocol action — register agents, create missions with task chains, start tasks, submit results, update reputation, submit peer reports, and admin operations.
 
 ---
 
@@ -224,6 +253,7 @@ The frontend displays all 3 protocol layers: agent fleet with reputation scores,
 | AI consensus | Optimistic Democracy + Equivalence Principle |
 | Validators per TX | 5 LLM validators |
 | Frontend | Next.js 16, TypeScript |
+| Bridge | Python (subprocess → genlayer CLI) |
 | Deploy | GenLayer CLI |
 
 ---
@@ -240,17 +270,29 @@ The frontend displays all 3 protocol layers: agent fleet with reputation scores,
 ### Run the frontend
 
 ```bash
-cd frontend
+cd rover_contract/frontend
 npm install
 npm run dev
-# Open http://localhost:3000
+# http://localhost:3000       → mission demo
+# http://localhost:3000/protocol → protocol explorer
 ```
 
 ### Run the simulation
 
 ```bash
-# Open Webots → File → Open World → sojourner.wbt
+# Open Webots → File → Open World → nasa/worlds/sojourner.wbt
 # Controller runs automatically, writes mission_log.json to frontend/public/
+# Rover collects 3 samples and returns to base position
+```
+
+### Run the bridge
+
+```bash
+cd rover_contract
+# Fill PRIVATE_KEY in .env
+python bridge.py --status          # verify connectivity
+python bridge.py                   # Phase 1 (sample submission)
+python bridge.py --phase 2         # Phase 2 (full protocol sequence)
 ```
 
 ### Register a new agent
@@ -270,12 +312,16 @@ genlayer write 0xfdca4ab91E9c49f4f466F47F5adB9e34B3Eb5Ed6 create_mission \
 
 # 2. Add tasks with dependencies
 genlayer write 0xfdca4ab91E9c49f4f466F47F5adB9e34B3Eb5Ed6 add_task \
-  --args "mission-id" "task-1" "EXPLORE" "Map the terrain" "my-rover-01" "60" ""
+  --args "mission-id" "task-1" "EXPLORE" "Map the terrain" "my-rover-01" "50" ""
 
-# 3. Execute and submit result
+# 3. Start task, execute, submit result
 genlayer write 0xfdca4ab91E9c49f4f466F47F5adB9e34B3Eb5Ed6 start_task --args "task-1"
 genlayer write 0xfdca4ab91E9c49f4f466F47F5adB9e34B3Eb5Ed6 submit_task_result \
   --args "mission-id" "task-1" "MyRover" "Terrain mapped at coordinates..."
+
+# 4. Update reputation after mission
+genlayer write 0xf39101cB9A2CD4224d0143f812B9c6CB012edDAe update_reputation \
+  --args "my-rover-01" "true" "Completed all objectives ahead of schedule"
 ```
 
 ### Deploy your own contracts
@@ -283,9 +329,9 @@ genlayer write 0xfdca4ab91E9c49f4f466F47F5adB9e34B3Eb5Ed6 submit_task_result \
 ```bash
 genlayer network set testnet-bradbury
 genlayer account create --name default
-genlayer deploy --contract contracts/agent_registry.py
-genlayer deploy --contract contracts/mission_factory.py
-genlayer deploy --contract contracts/reputation_ledger.py
+genlayer deploy --contract rover_contract/contracts/agent_registry.py
+genlayer deploy --contract rover_contract/contracts/mission_factory.py
+genlayer deploy --contract rover_contract/contracts/reputation_ledger.py
 ```
 
 ---
@@ -308,7 +354,7 @@ genlayer deploy --contract contracts/reputation_ledger.py
 | Move toward detected points | ✅ Autonomous navigation loop |
 | Complete at least 1 collection | ✅ 3/3 samples collected |
 | Multiple samples (bonus) | ✅ 3 samples |
-| Return to base (bonus) | ⬜ Not implemented |
+| Return to base (bonus) | ✅ Rover autonomously returns to initial position after mission |
 | Sensors used | ✅ GPS (`Supervisor.getPosition()`), orientation |
 | Autonomous navigation algorithm | ✅ Heading calibration + PD controller |
 | Obstacle avoidance | ✅ Stuck detection + escape maneuver |
@@ -348,7 +394,7 @@ The Dev Fee model makes this sustainable: every `register_agent`, `submit_task_r
 
 ## Team
 
-Built solo for Aleph Hackathon (Phase 1) and GenLayer Hackathon (Phase 2).
+Built solo for Aleph Hackathon (Phase 1), GenLayer Bradbury Hackathon (Phase 2), and PL Genesis (Phase 3).
 
 ---
 
