@@ -48,6 +48,10 @@ async function genCallFetch(
 }
 
 // ── genlayer-js client (best-effort, falls back to fetch) ──────────────────────
+// The package name is split so Turbopack does not statically bundle it — it may
+// not be installed in all deploy environments. All reads fall back to genCallFetch.
+const _GL_PKG = ["genlayer", "js"].join("-");
+
 let _client: unknown = null;
 let _clientFailed = false;
 
@@ -59,14 +63,11 @@ async function tryGenlayerClient(
   if (_clientFailed) throw new Error("genlayer-js unavailable");
   try {
     if (!_client) {
-      // genlayer-js exposes createClient, not createPublicClient — triggers fallback per spec
-      // but we attempt it anyway in case a future version adds it
-      const mod = await import("genlayer-js" as string);
+      const mod = await import(/* webpackIgnore: true */ _GL_PKG) as Record<string, unknown>;
       const createClient =
-        (mod as Record<string, unknown>).createPublicClient ??
-        (mod as Record<string, unknown>).createClient;
-      if (typeof createClient !== "function") throw new Error("createPublicClient not found");
-      _client = (createClient as Function)({
+        (mod.createPublicClient ?? mod.createClient) as Function | undefined;
+      if (typeof createClient !== "function") throw new Error("createClient not found");
+      _client = createClient({
         chain: {
           id: 4221,
           name: "GenLayer Bradbury Testnet",
@@ -258,7 +259,7 @@ export async function writeContractFn(
   functionName: string,
   args: unknown[] = []
 ): Promise<string> {
-  const mod = await import("genlayer-js" as string) as Record<string, unknown>;
+  const mod = await import(/* webpackIgnore: true */ _GL_PKG) as Record<string, unknown>;
   const createClientFn = mod.createClient as (cfg: unknown) => Record<string, unknown>;
   const createAccountFn = mod.createAccount as (pk: `0x${string}`) => unknown;
   const account = createAccountFn(privateKey);
