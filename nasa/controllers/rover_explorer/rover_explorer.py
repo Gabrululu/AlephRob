@@ -199,4 +199,6 @@ else:
     print("[ERROR] No se pudo alcanzar el origen.")
 
 save_mission()
-while robot.step(timestep) != -1: stop()
+print("[SIM] Reiniciando simulación en 3 segundos...")
+for _ in range(int(3000 / timestep)): tick()
+robot.simulationReset()
